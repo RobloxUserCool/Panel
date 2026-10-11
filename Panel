@@ -1,0 +1,213 @@
+local Players = game:GetService("Players")
+local RS = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local L = game:GetService("Lighting")
+local lp = Players.LocalPlayer
+local cam = workspace.CurrentCamera
+
+local S = {speed=false, speedVal=50, jump=false, jumpVal=100, inf=false, noclip=false,
+    fly=false, flyVal=60, esp=false, fb=false, fov=false, fovVal=90, afk=true}
+local conns = {}
+local function bind(sig, fn) local c = sig:Connect(fn) table.insert(conns, c) return c end
+local function hum() return lp.Character and lp.Character:FindFirstChildOfClass("Humanoid") end
+local function root() return lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") end
+
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "UniversalHub" gui.ResetOnSpawn = false
+pcall(function() gui.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
+if not gui.Parent then gui.Parent = lp:WaitForChild("PlayerGui") end
+
+local BG, ACC, BTN = Color3.fromRGB(25,25,35), Color3.fromRGB(90,120,255), Color3.fromRGB(40,40,55)
+local function corner(o, r) local c = Instance.new("UICorner") c.CornerRadius = UDim.new(0, r or 8) c.Parent = o end
+
+local function drag(handle, target, onClick)
+    local dragging, moved, startIn, startPos
+    bind(handle.InputBegan, function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            dragging, moved, startIn, startPos = true, false, i.Position, target.Position
+            local ch ch = i.Changed:Connect(function()
+                if i.UserInputState == Enum.UserInputState.End then
+                    dragging = false ch:Disconnect()
+                    if not moved and onClick then onClick() end
+                end
+            end)
+        end
+    end)
+    bind(UIS.InputChanged, function(i)
+        if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+            local d = i.Position - startIn
+            if d.Magnitude > 8 then moved = true end
+            if moved then
+                target.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+            end
+        end
+    end)
+end
+
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 300, 0, 290) main.Position = UDim2.new(0.5, -150, 0.5, -145)
+main.BackgroundColor3 = BG main.Parent = gui corner(main, 12)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 34) title.BackgroundColor3 = ACC
+title.Text = "  Universal Hub" title.TextXAlignment = Enum.TextXAlignment.Left
+title.TextColor3 = Color3.new(1,1,1) title.Font = Enum.Font.GothamBold title.TextSize = 16
+title.Parent = main corner(title, 12)
+
+local close = Instance.new("TextButton")
+close.Size = UDim2.new(0, 34, 0, 34) close.Position = UDim2.new(1, -34, 0, 0)
+close.BackgroundTransparency = 1 close.Text = "X" close.TextColor3 = Color3.new(1,1,1)
+close.Font = Enum.Font.GothamBold close.TextSize = 18 close.Parent = main
+close.MouseButton1Click:Connect(function() main.Visible = false end)
+
+local icon = Instance.new("TextButton")
+icon.Size = UDim2.new(0, 50, 0, 50) icon.Position = UDim2.new(0, 15, 0.35, 0)
+icon.BackgroundColor3 = ACC icon.Text = "UH" icon.TextColor3 = Color3.new(1,1,1)
+icon.Font = Enum.Font.GothamBold icon.TextSize = 18 icon.AutoButtonColor = false
+icon.Parent = gui corner(icon, 25)
+drag(icon, icon, function() main.Visible = not main.Visible end)
+drag(title, main)
+
+-- вкладки
+local tabBar = Instance.new("Frame")
+tabBar.Size = UDim2.new(1, -10, 0, 30) tabBar.Position = UDim2.new(0, 5, 0, 38)
+tabBar.BackgroundTransparency = 1 tabBar.Parent = main
+local tl = Instance.new("UIListLayout") tl.FillDirection = Enum.FillDirection.Horizontal tl.Padding = UDim.new(0, 4) tl.Parent = tabBar
+
+local pages, tabBtns = {}, {}
+local function showPage(name)
+    for n, p in pairs(pages) do p.Visible = (n == name) end
+    for n, b in pairs(tabBtns) do b.BackgroundColor3 = (n == name) and ACC or BTN end
+end
+local function newPage(name)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1/3, -3, 1, 0) b.Text = name b.TextColor3 = Color3.new(1,1,1)
+    b.Font = Enum.Font.GothamBold b.TextSize = 13 b.BackgroundColor3 = BTN b.Parent = tabBar corner(b, 6)
+    local p = Instance.new("ScrollingFrame")
+    p.Size = UDim2.new(1, -10, 1, -76) p.Position = UDim2.new(0, 5, 0, 72)
+    p.BackgroundTransparency = 1 p.BorderSizePixel = 0 p.ScrollBarThickness = 3
+    p.AutomaticCanvasSize = Enum.AutomaticSize.Y p.CanvasSize = UDim2.new() p.Visible = false p.Parent = main
+    local ll = Instance.new("UIListLayout") ll.Padding = UDim.new(0, 6) ll.Parent = p
+    pages[name], tabBtns[name] = p, b
+    b.MouseButton1Click:Connect(function() showPage(name) end)
+    return p
+end
+
+local function toggle(page, text, key, cb)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, -6, 0, 34) b.Font = Enum.Font.Gotham b.TextSize = 14
+    b.TextColor3 = Color3.new(1,1,1) b.Parent = page corner(b, 6)
+    local function r() b.Text = text .. (S[key] and "  [ВКЛ]" or "  [ВЫКЛ]") b.BackgroundColor3 = S[key] and Color3.fromRGB(50,150,80) or BTN end
+    r()
+    b.MouseButton1Click:Connect(function() S[key] = not S[key] r() if cb then cb(S[key]) end end)
+end
+local function input(page, text, key)
+    local f = Instance.new("Frame") f.Size = UDim2.new(1, -6, 0, 34) f.BackgroundColor3 = BTN f.Parent = page corner(f, 6)
+    local l = Instance.new("TextLabel") l.Size = UDim2.new(0.6, 0, 1, 0) l.Position = UDim2.new(0, 10, 0, 0)
+    l.BackgroundTransparency = 1 l.Text = text l.TextXAlignment = Enum.TextXAlignment.Left
+    l.TextColor3 = Color3.new(1,1,1) l.Font = Enum.Font.Gotham l.TextSize = 14 l.Parent = f
+    local t = Instance.new("TextBox") t.Size = UDim2.new(0.3, 0, 0, 24) t.Position = UDim2.new(0.68, 0, 0.5, -12)
+    t.BackgroundColor3 = BG t.TextColor3 = Color3.new(1,1,1) t.Text = tostring(S[key])
+    t.Font = Enum.Font.Gotham t.TextSize = 14 t.Parent = f corner(t, 5)
+    t.FocusLost:Connect(function() local n = tonumber(t.Text) if n then S[key] = n else t.Text = tostring(S[key]) end end)
+end
+local function button(page, text, cb)
+    local b = Instance.new("TextButton") b.Size = UDim2.new(1, -6, 0, 34) b.Text = text
+    b.BackgroundColor3 = BTN b.TextColor3 = Color3.new(1,1,1) b.Font = Enum.Font.Gotham b.TextSize = 14
+    b.Parent = page corner(b, 6) b.MouseButton1Click:Connect(cb)
+end
+
+-- ESP
+local esp = {}
+local function refreshESP(p)
+    if esp[p] then esp[p]:Destroy() esp[p] = nil end
+    if S.esp and p.Character then
+        local h = Instance.new("Highlight")
+        h.FillColor = Color3.fromRGB(255,60,60) h.FillTransparency = 0.5
+        h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        h.Adornee = p.Character h.Parent = gui esp[p] = h
+    end
+end
+local function hook(p) if p ~= lp then bind(p.CharacterAdded, function() task.wait(0.3) refreshESP(p) end) end end
+for _, p in ipairs(Players:GetPlayers()) do hook(p) end
+bind(Players.PlayerAdded, hook)
+bind(Players.PlayerRemoving, function(p) if esp[p] then esp[p]:Destroy() esp[p] = nil end end)
+
+-- Fly
+local fbv, fbg
+local function stopFly()
+    if fbv then fbv:Destroy() fbv = nil end
+    if fbg then fbg:Destroy() fbg = nil end
+    local h = hum() if h then h.PlatformStand = false end
+end
+local function startFly()
+    local r, h = root(), hum() if not r or not h then return end
+    stopFly()
+    fbv = Instance.new("BodyVelocity") fbv.MaxForce = Vector3.new(9e9,9e9,9e9) fbv.Velocity = Vector3.zero fbv.Parent = r
+    fbg = Instance.new("BodyGyro") fbg.MaxTorque = Vector3.new(9e9,9e9,9e9) fbg.P = 9e4 fbg.CFrame = cam.CFrame fbg.Parent = r
+    h.PlatformStand = true
+end
+
+-- вкладки и функции
+local mv = newPage("Движение")
+toggle(mv, "Скорость", "speed") input(mv, "Значение скорости", "speedVal")
+toggle(mv, "Высота прыжка", "jump") input(mv, "Сила прыжка", "jumpVal")
+toggle(mv, "Бесконечный прыжок", "inf")
+toggle(mv, "Noclip (сквозь стены)", "noclip")
+toggle(mv, "Полёт", "fly", function(v) if v then startFly() else stopFly() end end)
+input(mv, "Скорость полёта", "flyVal")
+
+local vs = newPage("Визуал")
+toggle(vs, "ESP игроков", "esp", function() for _, p in ipairs(Players:GetPlayers()) do if p ~= lp then refreshESP(p) end end end)
+local orig = {Brightness = L.Brightness, ClockTime = L.ClockTime, FogEnd = L.FogEnd, Ambient = L.Ambient}
+toggle(vs, "Полная яркость", "fb", function(v)
+    if not v then for k, val in pairs(orig) do L[k] = val end end
+end)
+toggle(vs, "Свой FOV", "fov") input(vs, "Значение FOV", "fovVal")
+
+local pl = newPage("Игрок")
+toggle(pl, "Анти-AFK", "afk")
+button(pl, "Сбросить персонажа", function() local h = hum() if h then h.Health = 0 end end)
+button(pl, "Закрыть скрипт полностью", function()
+    S.fly, S.esp, S.fb = false, false, false
+    stopFly() for p in pairs(esp) do esp[p]:Destroy() end
+    for k, val in pairs(orig) do L[k] = val end
+    for _, c in ipairs(conns) do c:Disconnect() end
+    gui:Destroy()
+end)
+showPage("Движение")
+
+-- логика
+bind(UIS.JumpRequest, function()
+    local h = hum() if S.inf and h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+end)
+bind(lp.Idled, function()
+    if S.afk then local vu = game:GetService("VirtualUser") vu:CaptureController() vu:ClickButton2(Vector2.new()) end
+end)
+bind(RS.Stepped, function()
+    if S.noclip and lp.Character then
+        for _, p in ipairs(lp.Character:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide = false end
+        end
+    end
+end)
+bind(RS.Heartbeat, function()
+    local h, r = hum(), root()
+    if h then
+        if S.speed then h.WalkSpeed = S.speedVal end
+        if S.jump then h.UseJumpPower = true h.JumpPower = S.jumpVal end
+    end
+    if S.fov then cam.FieldOfView = S.fovVal end
+    if S.fb then L.Brightness = 2 L.ClockTime = 14 L.FogEnd = 1e6 L.Ambient = Color3.new(1,1,1) end
+    if S.fly and h and r then
+        if not fbv or fbv.Parent ~= r then startFly() end
+        local m = h.MoveDirection
+        local look, right = cam.CFrame.LookVector, cam.CFrame.RightVector
+        local f = Vector3.new(look.X, 0, look.Z).Unit
+        local rt = Vector3.new(right.X, 0, right.Z).Unit
+        local vel = look * m:Dot(f) + right * m:Dot(rt)
+        fbv.Velocity = vel * S.flyVal
+        fbg.CFrame = cam.CFrame
+    end
+end)
