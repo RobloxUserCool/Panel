@@ -82,8 +82,8 @@ local function showPage(name)
 end
 local function newPage(name)
     local b = Instance.new("TextButton")
-    b.Size = UDim2.new(1/3, -3, 1, 0) b.Text = name b.TextColor3 = Color3.new(1,1,1)
-    b.Font = Enum.Font.GothamBold b.TextSize = 13 b.BackgroundColor3 = BTN b.Parent = tabBar corner(b, 6)
+    b.Size = UDim2.new(1/4, -3, 1, 0) b.Text = name b.TextColor3 = Color3.new(1,1,1)
+    b.Font = Enum.Font.GothamBold b.TextSize = 12 b.BackgroundColor3 = BTN b.Parent = tabBar corner(b, 6)
     local p = Instance.new("ScrollingFrame")
     p.Size = UDim2.new(1, -10, 1, -76) p.Position = UDim2.new(0, 5, 0, 72)
     p.BackgroundTransparency = 1 p.BorderSizePixel = 0 p.ScrollBarThickness = 3
@@ -176,6 +176,112 @@ button(pl, "Закрыть скрипт полностью", function()
     for _, c in ipairs(conns) do c:Disconnect() end
     gui:Destroy()
 end)
+
+-- === НИК ===
+S.nick, S.nickName, S.nickRainbow, S.nickHex = false, "", true, "FF4040"
+local CoreGui = game:GetService("CoreGui")
+local realName, realDisp = lp.Name, lp.DisplayName
+local changed = {}
+local tag, oldDDT
+
+local function fakeName() return (S.nickName ~= "" and S.nickName) or realDisp end
+local function nickColor()
+    if S.nickRainbow then return Color3.fromHSV((tick() * 0.5) % 1, 1, 1) end
+    local ok, c = pcall(Color3.fromHex, (S.nickHex:gsub("#", "")))
+    return ok and c or Color3.new(1, 1, 1)
+end
+
+local function restoreAll()
+    for lbl, o in pairs(changed) do
+        pcall(function() lbl.Text = o.text lbl.TextColor3 = o.color end)
+    end
+    changed = {}
+    if tag then tag:Destroy() tag = nil end
+    local h = hum()
+    if h and oldDDT then h.DisplayDistanceType = oldDDT end
+    oldDDT = nil
+end
+gui.Destroying:Connect(restoreAll)
+
+local function scan(col)
+    local name = fakeName()
+    local user = "@" .. (name:gsub("%s", ""))
+    local ok, list = pcall(function() return CoreGui:GetDescendants() end)
+    if not ok then return end
+    for _, o in ipairs(list) do
+        if (o:IsA("TextLabel") or o:IsA("TextButton")) and not o:IsDescendantOf(gui) then
+            local t = o.Text
+            local new
+            if t == realDisp or t == realName then new = name
+            elseif t == "@" .. realName or t == "@" .. realDisp then new = user end
+            if new then
+                if not changed[o] then changed[o] = {text = t, color = o.TextColor3} end
+                o.Text = new
+                o.TextColor3 = col
+            end
+        end
+    end
+end
+
+local nk = newPage("Ник")
+toggle(nk, "Свой ник (виден только мне)", "nick")
+
+local function inputStr(page, text, key)
+    local f = Instance.new("Frame") f.Size = UDim2.new(1, -6, 0, 34) f.BackgroundColor3 = BTN f.Parent = page corner(f, 6)
+    local l = Instance.new("TextLabel") l.Size = UDim2.new(0.4, 0, 1, 0) l.Position = UDim2.new(0, 10, 0, 0)
+    l.BackgroundTransparency = 1 l.Text = text l.TextXAlignment = Enum.TextXAlignment.Left
+    l.TextColor3 = Color3.new(1, 1, 1) l.Font = Enum.Font.Gotham l.TextSize = 14 l.Parent = f
+    local t = Instance.new("TextBox") t.Size = UDim2.new(0.55, 0, 0, 24) t.Position = UDim2.new(0.43, 0, 0.5, -12)
+    t.BackgroundColor3 = BG t.TextColor3 = Color3.new(1, 1, 1) t.Text = tostring(S[key])
+    t.Font = Enum.Font.Gotham t.TextSize = 14 t.ClearTextOnFocus = false t.Parent = f corner(t, 5)
+    t.FocusLost:Connect(function() S[key] = t.Text end)
+end
+inputStr(nk, "Новый ник", "nickName")
+toggle(nk, "Радужный цвет", "nickRainbow")
+inputStr(nk, "Цвет (HEX)", "nickHex")
+
+local info = Instance.new("TextLabel")
+info.Size = UDim2.new(1, -6, 0, 50) info.BackgroundTransparency = 1 info.TextWrapped = true
+info.TextColor3 = Color3.fromRGB(170, 170, 190) info.Font = Enum.Font.Gotham info.TextSize = 12
+info.TextXAlignment = Enum.TextXAlignment.Left info.TextYAlignment = Enum.TextYAlignment.Top
+info.Parent = nk
+
+local lastScan = 0
+bind(RS.Heartbeat, function()
+    if not S.nick then
+        if next(changed) or tag then restoreAll() end
+        info.Text = "Настоящий ник: " .. realDisp .. " (@" .. realName .. ")\nСейчас показывается: выкл"
+        return
+    end
+    local col = nickColor()
+    for lbl in pairs(changed) do
+        if lbl.Parent then lbl.TextColor3 = col else changed[lbl] = nil end
+    end
+
+    local head = lp.Character and lp.Character:FindFirstChild("Head")
+    local h = hum()
+    if head and h then
+        if not tag or tag.Adornee ~= head then
+            if tag then tag:Destroy() end
+            tag = Instance.new("BillboardGui")
+            tag.Size = UDim2.new(0, 220, 0, 30) tag.StudsOffset = Vector3.new(0, 2.6, 0)
+            tag.AlwaysOnTop = true tag.Adornee = head tag.Parent = gui
+            local tx = Instance.new("TextLabel") tx.Name = "T" tx.Size = UDim2.new(1, 0, 1, 0)
+            tx.BackgroundTransparency = 1 tx.Font = Enum.Font.GothamBold tx.TextSize = 18
+            tx.TextStrokeTransparency = 0 tx.Parent = tag
+        end
+        if not oldDDT then oldDDT = h.DisplayDistanceType end
+        h.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+        tag.T.Text = fakeName() tag.T.TextColor3 = col
+    end
+
+    if tick() - lastScan > 1 then
+        lastScan = tick()
+        scan(col)
+        info.Text = "Настоящий ник: " .. realDisp .. " (@" .. realName .. ")\nСейчас показывается: " .. fakeName()
+    end
+end)
+
 showPage("Движение")
 
 -- логика
